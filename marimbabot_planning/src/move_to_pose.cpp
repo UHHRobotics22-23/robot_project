@@ -1,16 +1,16 @@
-#include <iostream>
-#include <ros/ros.h>
+#include <bio_ik/bio_ik.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <iostream>
 #include <moveit_msgs/DisplayTrajectory.h>
 #include <moveit_msgs/RobotState.h>
 #include <moveit_msgs/RobotTrajectory.h>
 #include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/robot_state/conversions.h>
+#include <ros/ros.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <trajectory_msgs/JointTrajectoryPoint.h>
-#include <moveit/robot_state/conversions.h>
-#include <bio_ik/bio_ik.h>
 
 /**
  * @brief concatinates a vector of n plans (n>0) into one plan
@@ -212,6 +212,43 @@ moveit::planning_interface::MoveGroupInterface::Plan hit_points(
 
     return hit_plan;
 }
+
+
+/**
+ * @brief Slow down a trajectory to a given length. No speedup is possible.
+ *
+ * @param input_plan
+ * @param length
+ * @return moveit::planning_interface::MoveGroupInterface::Plan
+ **/
+
+moveit::planning_interface::MoveGroupInterface::Plan slow_down_plan(
+    const moveit::planning_interface::MoveGroupInterface::Plan& input_plan,
+    double length)
+{
+    assert(input_plan.trajectory_.joint_trajectory.points.size() > 0 && "Input plan must have at least one point");
+
+    // Get the time from start of the last point
+    double original_length = input_plan.trajectory_.joint_trajectory.points.back().time_from_start.toSec();
+
+    // Assert that the input plan is shorter than the desired length
+    assert(original_length <= length && "Input plan must be shorter than the desired length");
+
+    // Calculate the scaling factor
+    double scaling_factor = length / original_length;
+
+    // Copy the input plan
+    moveit::planning_interface::MoveGroupInterface::Plan output_plan{input_plan};
+
+    // Scale the time stamps in a functional way
+    for(auto i = 0; i < output_plan.trajectory_.joint_trajectory.points.size(); i++)
+    {
+        output_plan.trajectory_.joint_trajectory.points[i].time_from_start *= scaling_factor;
+    }
+
+    return output_plan;
+}
+
 
 int main(int argc, char **argv)
 {
